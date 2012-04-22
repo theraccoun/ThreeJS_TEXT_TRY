@@ -1,0 +1,590 @@
+<!doctype html>
+<html lang="en">
+<head>
+    <title>three.js canvas - geometry - text</title>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, user-scalable=no, minimum-scale=1.0, maximum-scale=1.0">
+    <style>
+        body {
+            font-family: Monospace;
+            background-color: #f0f0f0;
+            margin: 0px;
+            overflow: hidden;
+        }
+    </style>
+</head>
+<body>
+
+
+<script src="Three.js"></script>
+
+<script src="js/Stats.js"></script>
+
+<!-- load the font file from canvas-text -->
+
+<script src="fonts/helvetiker_regular.typeface.js"></script>
+
+
+
+<script>
+
+var textSize = {
+    torque : 30,
+    equals : 30,
+    r : 30,
+    cross : 30,
+    force : 30
+};
+
+var container, stats;
+
+var camera, scene, renderer, projector;
+
+var text, parent;
+
+var targetRotation = 0;
+var targetRotationOnMouseDown = 0;
+
+var mouseX = 0;
+var mouseXOnMouseDown = 0;
+
+var windowHalfX = window.innerWidth / 2;
+var windowHalfY = window.innerHeight / 2;
+
+//var theText = {
+//    full : "T = r x f",
+//    equals : "=",
+//    torque : "t",
+//    cross : "x",
+//    force : "f",
+//    radius : "r",
+//
+//    yPos : 100
+//}
+
+var torqueText = { string : "\u03C4 = r x f" , meta : null }
+
+var stdSpace = 20;      // Standard size spacing between letters
+
+var hash = document.location.hash.substr( 1 );
+
+var textMaterial = new THREE.MeshBasicMaterial( { color: 0x0000ff, overdraw: true } );
+
+var objects = [];
+
+init();
+animate();
+
+function init() {
+
+    container = document.createElement( 'div' );
+    document.body.appendChild( container );
+
+    var info = document.createElement( 'div' );
+    info.style.position = 'absolute';
+    info.style.top = '10px';
+    info.style.width = '100%';
+    info.style.textAlign = 'center';
+    info.innerHTML = 'Expandable 3D text </a><br/>Click to expand the text';
+    container.appendChild( info );
+
+    camera = new THREE.PerspectiveCamera( 75, window.innerWidth / window.innerHeight, 1, 1000 );
+    camera.position.set( 0, 20, 200 );
+
+    scene = new THREE.Scene();
+
+    scene.add( camera );
+
+    // Get text from hash
+
+    createAndSetTextAttributes( torqueText, 0 , textMaterial) ;
+
+//    parent = new THREE.Object3D();
+//    parent.add( text.torque );
+//    parent.add( text.equals );
+//    parent.add(text.r);
+//    parent.add(text.cross);
+//    parent.add(text.force);
+
+//    drawAxes();
+//    createVector();
+
+    scene.add( parent );
+
+//    loadObj();
+
+    projector = new THREE.Projector();
+
+    renderer = new THREE.CanvasRenderer();
+    renderer.setSize( window.innerWidth, window.innerHeight );
+
+    container.appendChild( renderer.domElement );
+
+    stats = new Stats();
+    stats.domElement.style.position = 'absolute';
+    stats.domElement.style.top = '0px';
+    container.appendChild( stats.domElement );
+
+    document.addEventListener( 'mousedown', onDocumentMouseDown, false );
+    document.addEventListener( 'touchstart', onDocumentTouchStart, false );
+    document.addEventListener( 'touchmove', onDocumentTouchMove, false );
+
+}
+
+function drawAxes(){
+
+    var material = new THREE.LineBasicMaterial({
+        color: 0x0000ff
+    });
+
+    var geoXAxis = new THREE.Geometry();
+    geoXAxis.vertices.push(new THREE.Vertex(new THREE.Vector3(-100, 0, 0)));
+    geoXAxis.vertices.push(new THREE.Vertex(new THREE.Vector3(100, 0, 0)));
+
+    var xAxis = new THREE.Line(geoXAxis, material);
+
+
+    scene.add(xAxis);
+
+    var geoYAxis = new THREE.Geometry();
+    geoYAxis.vertices.push(new THREE.Vertex(new THREE.Vector3(0, -100, 0)));
+    geoYAxis.vertices.push(new THREE.Vertex(new THREE.Vector3(0, 100, 0)));
+
+    var yAxis = new THREE.Line(geoYAxis, material);
+    scene.add(yAxis);
+
+
+    var geoZAxis = new THREE.Geometry();
+    geoZAxis.vertices.push(new THREE.Vertex(new THREE.Vector3(0, 0, -100)));
+    geoZAxis.vertices.push(new THREE.Vertex(new THREE.Vector3(0, 0, 100)));
+
+    var zAxis = new THREE.Line(geoZAxis, material);
+    scene.add(zAxis);
+
+}
+
+var forceVector;
+
+function createVector(){
+
+    var meshMaterial = new THREE.MeshNormalMaterial
+
+    var geom = new THREE.Geometry();
+    var v1 = new THREE.Vector3(-20, -5,0);
+    var v3 = new THREE.Vector3(-20, 5,0);
+    var v2 = new THREE.Vector3(-30, 0 ,0);
+
+
+    console.log(geom.vertices)
+    geom.vertices.push(new THREE.Vertex(v1));
+    geom.vertices.push(new THREE.Vertex(v2));
+    geom.vertices.push(new THREE.Vertex(v3));
+
+    geom.faces.push( new THREE.Face3( 0, 2, 1 ) );
+    geom.computeFaceNormals();
+
+    var triangleMesh = new THREE.Mesh( geom, new THREE.MeshNormalMaterial() );
+
+    var cubeMesh = new THREE.Mesh( new THREE.CubeGeometry( 40, 5, 0 ), new THREE.MeshNormalMaterial() );
+    cubeMesh.position.y = 0;
+
+
+
+    forceVector = new THREE.Object3D();
+    forceVector.add(cubeMesh);
+    forceVector.add(triangleMesh);
+    forceVector.position.x = 100;
+    forceVector.scale.x = 2;
+    forceVector.matrix.setRotationFromEuler(forceVector.rotation);
+    scene.add(forceVector);
+}
+
+// Rotate an object around an axis in world space (the axis passes through the object's position)
+function rotateAroundWorldAxis( object, axis, radians ) {
+
+    var rotationMatrix = new THREE.Matrix4();
+
+    rotationMatrix.setRotationAxis( axis.normalize(), radians );
+    rotationMatrix.multiplySelf( object.matrix );                       // pre-multiply
+    object.matrix = rotationMatrix;
+    object.rotation.setRotationFromMatrix( object.matrix );
+}
+
+
+
+function loadObj(){
+
+    var loader = new THREE.JSONLoader();
+
+    loader.load( "models/animated/horse.js", function( geometry ) {
+
+        morphColorsToFaceColors( geometry );
+
+        addMorph( geometry, 550, 1000, 100 - Math.random() * 1000, FLOOR, 300, true );
+        addMorph( geometry, 550, 1000, 100 - Math.random() * 1000, FLOOR, 450, true );
+        addMorph( geometry, 550, 1000, 100 - Math.random() * 1000, FLOOR, 600, true );
+
+        addMorph( geometry, 550, 1000, 100 - Math.random() * 1000, FLOOR, -300, true );
+        addMorph( geometry, 550, 1000, 100 - Math.random() * 1000, FLOOR, -450, true );
+        addMorph( geometry, 550, 1000, 100 - Math.random() * 1000, FLOOR, -600, true );
+
+    } );
+}
+
+var defSize = 10;
+
+function createAndSetTextAttributes( text, position, textMaterial)
+{
+    parent = new THREE.Object3D();
+    var allChars = text.string.split(" ");
+
+    var metaText = [];
+
+    for(el in allChars){
+
+        var curChar = allChars[el];
+
+        var geom = new THREE.TextGeometry( curChar, {
+
+            size: 20,
+            height: 5,
+            curveSegments: 1,
+            font: "helvetiker"
+        })
+
+        geom.computeBoundingBox();
+        geom.width = ( geom.boundingBox.max.x - geom.boundingBox.min.x );
+
+        metaText[el] = new Object();
+
+        metaText[el].char = allChars[el];
+        metaText[el].width = geom.width;
+
+        var mesh = new THREE.Mesh( geom, textMaterial);
+
+        if(el == 0){
+            metaText[el].xPos = position;
+        }
+        else{
+            metaText[el].xPos = metaText[el - 1].xPos + stdSpace;
+        }
+
+        mesh.position.x = metaText[el].xPos;
+        mesh.position.y = 0;
+        mesh.position.z = 0;
+
+        parent.add(mesh);
+        objects.push(mesh);
+    }
+
+    text.meta = metaText;
+
+}
+
+//function createAndSetTextAttributes() {
+//
+//
+//    if ( hash.length !== 0 ) {
+//
+//        theText = hash;
+//
+//    }
+//
+//    var torque3d = new THREE.TextGeometry( theText.torque, {
+//
+//        size: textSize.torque,
+//        height: 20,
+//        curveSegments: 2,
+//        font: "helvetiker"
+//
+//    });
+//
+//    torque3d.computeBoundingBox();
+//    torque3d.width = ( torque3d.boundingBox.max.x - torque3d.boundingBox.min.x );
+//
+//    var centerOffset = -0.5 * ( torque3d.boundingBox.max.x - torque3d.boundingBox.min.x );
+//
+//    text = {
+//        full : null,
+//        equals : null,
+//        torque : null,
+//        force : null,
+//        r : null,
+//        cross : null
+//    }
+//    text.torque = new THREE.Mesh( torque3d, textMaterial );
+//
+//    text.torque.doubleSided = false;
+//
+//    text.torque.position.x = 0;
+//    text.torque.position.y = theText.yPos;
+//    text.torque.position.z = 0;
+//
+//
+//    var equals3d = new THREE.TextGeometry( theText.equals, {
+//
+//        size: textSize.equals,
+//        height: 20,
+//        curveSegments: 2,
+//        font: "helvetiker"
+//
+//    });
+//
+//    equals3d.computeBoundingBox();
+//    equals3d.width = (equals3d.boundingBox.max.x - equals3d.boundingBox.min.x);
+//
+//    text.equals = new THREE.Mesh( equals3d, textMaterial);
+//
+//    text.equals.doubleSided = false;
+//
+//    text.equals.position.x = text.torque.position.x + torque3d.width + stdSpace;
+//    text.equals.position.y = theText.yPos;
+//    text.equals.position.z = 0;
+//
+//
+//    var r3d = new THREE.TextGeometry( theText.radius, {
+//
+//        size: textSize.r,
+//        height: 20,
+//        curveSegments: 2,
+//        font: "helvetiker"
+//
+//    });
+//
+//    r3d.computeBoundingBox();
+//    r3d.width =  (r3d.boundingBox.max.x - r3d.boundingBox.min.x);
+//
+//    text.r = new THREE.Mesh( r3d, textMaterial);
+//
+//    text.r.doubleSided = false;
+//
+//    text.r.position.x = text.equals.position.x + equals3d.width + stdSpace;
+//    text.r.position.y = theText.yPos;
+//    text.r.position.z = 0;
+//
+//
+//    var cross3d = new THREE.TextGeometry( theText.cross, {
+//
+//        size: textSize.cross,
+//        height: 20,
+//        curveSegments: 2,
+//        font: "helvetiker"
+//
+//    });
+//
+//
+//
+//    cross3d.computeBoundingBox();
+//    cross3d.width = (cross3d.boundingBox.max.x - cross3d.boundingBox.min.x);
+//
+//    text.cross = new THREE.Mesh( cross3d, textMaterial);
+//
+//    text.cross.doubleSided = false;
+//
+//    text.cross.position.x = text.r.position.x + r3d.width + stdSpace;
+//    text.cross.position.y = theText.yPos;
+//    text.cross.position.z = 0;
+//
+//
+//    var force3d = new THREE.TextGeometry( theText.force, {
+//
+//        size: textSize.force,
+//        height: 20,
+//        curveSegments: 2,
+//        font: "helvetiker"
+//
+//    });
+//
+//
+//
+//    force3d.computeBoundingBox();
+//
+//    text.force = new THREE.Mesh( force3d, textMaterial);
+//
+//    text.force.doubleSided = false;
+//
+//    text.force.position.x = text.cross.position.x + cross3d.width + stdSpace;
+//    text.force.position.y = theText.yPos;
+//    text.force.position.z = 0;
+//
+//}
+
+//
+
+function onDocumentMouseDown( event ) {
+
+    event.preventDefault();
+
+    document.addEventListener( 'mousemove', onDocumentMouseMove, false );
+    document.addEventListener( 'mouseup', onDocumentMouseUp, false );
+    document.addEventListener( 'mouseout', onDocumentMouseOut, false );
+
+
+    mouseXOnMouseDown = event.clientX - windowHalfX;
+    targetRotationOnMouseDown = targetRotation;
+
+}
+
+function onDocumentMouseMove( event ) {
+
+    mouseX = event.clientX - windowHalfX;
+
+    targetRotation = targetRotationOnMouseDown + ( mouseX - mouseXOnMouseDown ) * 0.02;
+
+}
+
+function onDocumentMouseUp( event ) {
+
+    event.preventDefault();
+
+    var vector = new THREE.Vector3(( event.clientX / window.innerWidth)*2 - 1, -(event.clientY / window.innerHeight)*2 +1, 0);
+    projector.unprojectVector(vector, camera);
+
+    var ray = new THREE.Ray( camera.position, vector.subSelf( camera.position).normalize());
+
+    var intersects = ray.intersectObjects( objects);
+
+    if(intersects.length > 0){
+        for(i in torqueText.meta){
+            if(torqueText.meta[i].xPos == intersects[0].object.position.x){
+                alert("you clicked: " + torqueText.meta[i].char);
+            }
+        }
+    }
+    else{
+        alert("did not intersect");
+    }
+//    increaseCrossProduct();
+
+    document.removeEventListener( 'mousemove', onDocumentMouseMove, false );
+    document.removeEventListener( 'mouseup', onDocumentMouseUp, false );
+    document.removeEventListener( 'mouseout', onDocumentMouseOut, false );
+
+}
+
+function detectClickedLetter(){
+
+
+}
+
+function rotationAroundAxis( object, axisPoint, axisDirection, amount){
+
+    var material = new THREE.LineBasicMaterial({
+        color: 0x0000ff
+    });
+
+
+    var geoXAxis = new THREE.Geometry();
+    geoXAxis.vertices.push(new THREE.Vertex(new THREE.Vector3(axisPoint[0], axisPoint[1], 0)));
+    geoXAxis.vertices.push(new THREE.Vertex(new THREE.Vector3(axisPoint[0], 30, 0)));
+
+    var xAxis = new THREE.Line(geoXAxis, material);
+
+    scene.add(xAxis);
+
+
+    var dummy = new THREE.Object3D();
+    dummy.position.x = axisPoint[0];
+    dummy.position.y = axisPoint[1];
+    dummy.position.z = axisPoint[2];
+    scene.add( dummy );
+
+    dummy.add(object);
+
+    dummy.rotation.z += amount;
+
+
+}
+
+var rotation_matrix;
+
+function increaseCrossProduct(){
+
+
+    if(Math.abs(forceVector.rotation.z) >= Math.PI / 2.0){
+        return;
+    }else{
+
+//        forceVector.rotation.set(0, 0, 0);
+//        forceVector.rotation.setRotationFromEuler(forceVector.rotation);
+
+//        var rotation_matrix = new THREE.Matrix4().setRotationX(.01); // Animated rotation will be in .01 radians along object's X axis
+//        // Update the object's rotation & apply it
+//        rotation_matrix.multiplySelf(forceVector.matrix);
+//        forceVector.rotation.z -= 0.1;
+
+
+//        forceVector.rotation.z -= 0.1;
+    }
+
+//    parent.remove(text.cross);
+//    parent.remove(text.force);
+//    parent.remove(text.torque);
+//    parent.remove(text.equals);
+//    parent.remove(text.r);
+//    textSize.cross += 1;
+//    textSize.torque += 1;
+//    createAndSetTextAttributes( "meow to the cheese");
+//    parent.add(text.cross);
+//    parent.add(text.force);
+//    parent.add(text.equals);
+//    parent.add(text.torque);
+//    parent.add(text.r);
+
+}
+
+function onDocumentMouseOut( event ) {
+
+    document.removeEventListener( 'mousemove', onDocumentMouseMove, false );
+    document.removeEventListener( 'mouseup', onDocumentMouseUp, false );
+    document.removeEventListener( 'mouseout', onDocumentMouseOut, false );
+
+}
+
+function onDocumentTouchStart( event ) {
+
+    if ( event.touches.length == 1 ) {
+
+        event.preventDefault();
+
+        mouseXOnMouseDown = event.touches[ 0 ].pageX - windowHalfX;
+        targetRotationOnMouseDown = targetRotation;
+
+    }
+
+}
+
+function onDocumentTouchMove( event ) {
+
+    if ( event.touches.length == 1 ) {
+
+        event.preventDefault();
+
+        mouseX = event.touches[ 0 ].pageX - windowHalfX;
+        targetRotation = targetRotationOnMouseDown + ( mouseX - mouseXOnMouseDown ) * 0.05;
+
+    }
+
+}
+
+//
+
+function animate() {
+
+    requestAnimationFrame( animate );
+
+    render();
+    stats.update();
+
+}
+
+function render() {
+
+    renderer.render( scene, camera );
+
+}
+
+</script>
+
+</body>
+</html>
