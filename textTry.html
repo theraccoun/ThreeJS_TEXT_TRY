@@ -62,7 +62,8 @@ var windowHalfY = window.innerHeight / 2;
 //    yPos : 100
 //}
 
-var torqueText = { string : "\u03C4 = r x f" , meta : null }
+var torqueText = { string : "\u03C4 = r x f" , charList : null, metaChar : null, full3DObject : null, meshList : null, charSizeList : null, selectedChar : null };
+torqueText.charSizeList = [];
 
 var stdSpace = 20;      // Standard size spacing between letters
 
@@ -106,10 +107,10 @@ function init() {
 //    parent.add(text.cross);
 //    parent.add(text.force);
 
-//    drawAxes();
-//    createVector();
+    drawAxes();
+    createVector();
 
-    scene.add( parent );
+    scene.add( torqueText.full3DObject );
 
 //    loadObj();
 
@@ -235,18 +236,41 @@ var defSize = 10;
 
 function createAndSetTextAttributes( text, position, textMaterial)
 {
-    parent = new THREE.Object3D();
+
+    text.full3DObject = new THREE.Object3D();       // Holds the full string as a 3D object that can be added to the scene
+    text.meshList = [];                             // Holds a list of the mesh objects. Used by the intersection program to find what letters are clicked on
+
     var allChars = text.string.split(" ");
 
-    var metaText = [];
+    var fullWidth = 0;
+    if(text.metaChar == null){
+//        alert("allChars length: " + allChars.length);
+        var fullWidth = allChars.length * 40;
+        text.metaChar = [];
+    }else{
+        for(c in text.metaChar){
+            fullWidth += text.charSizeList[c] + 20;
+        }
+    }
+
+//    alert("fullWidth = " + fullWidth);
+
+    if(text.charSizeList == null){
+        text.charSizeList = [];
+    }
+
 
     for(el in allChars){
 
         var curChar = allChars[el];
 
+        if(text.charSizeList[el] == null || text.charSizeList[el] < 1){
+            text.charSizeList[el] = 20;
+        }
+
         var geom = new THREE.TextGeometry( curChar, {
 
-            size: 20,
+            size: text.charSizeList[el],
             height: 5,
             curveSegments: 1,
             font: "helvetiker"
@@ -255,29 +279,29 @@ function createAndSetTextAttributes( text, position, textMaterial)
         geom.computeBoundingBox();
         geom.width = ( geom.boundingBox.max.x - geom.boundingBox.min.x );
 
-        metaText[el] = new Object();
+        text.metaChar[el] = new Object();
 
-        metaText[el].char = allChars[el];
-        metaText[el].width = geom.width;
+        text.metaChar[el].char = allChars[el];
+        text.metaChar[el].width = geom.width;
 
         var mesh = new THREE.Mesh( geom, textMaterial);
 
         if(el == 0){
-            metaText[el].xPos = position;
+            // Compute full width of string to center the text
+            text.metaChar[el].xPos = position - fullWidth/2;
         }
         else{
-            metaText[el].xPos = metaText[el - 1].xPos + stdSpace;
+            text.metaChar[el].xPos = text.metaChar[el - 1].xPos + text.metaChar[el - 1].width + stdSpace;
         }
 
-        mesh.position.x = metaText[el].xPos;
+        mesh.position.x = text.metaChar[el].xPos;
         mesh.position.y = 0;
         mesh.position.z = 0;
 
-        parent.add(mesh);
-        objects.push(mesh);
-    }
 
-    text.meta = metaText;
+        text.full3DObject.add(mesh);
+        text.meshList.push(mesh);
+    }
 
 }
 
@@ -411,9 +435,36 @@ function createAndSetTextAttributes( text, position, textMaterial)
 
 //
 
+var initialMouseClickX = new Object();;
+
 function onDocumentMouseDown( event ) {
 
     event.preventDefault();
+
+    var vector = new THREE.Vector3(( event.clientX / window.innerWidth)*2 - 1, -(event.clientY / window.innerHeight)*2 +1, 0);
+    projector.unprojectVector(vector, camera);
+
+    var ray = new THREE.Ray( camera.position, vector.subSelf( camera.position).normalize());
+
+    var intersects = ray.intersectObjects( torqueText.meshList);
+
+    if(intersects.length > 0){
+        for(i in torqueText.metaChar){
+            if(torqueText.metaChar[i].xPos == intersects[0].object.position.x){
+                initialMouseClickX = event.clientX;
+                isMouseStartMoving = true;
+
+                if(torqueText.metaChar[i].char == "x"){
+                    torqueText.selectedChar = "x";
+
+
+                }
+            }
+        }
+    }
+    else{
+        alert("did not intersect");
+    }
 
     document.addEventListener( 'mousemove', onDocumentMouseMove, false );
     document.addEventListener( 'mouseup', onDocumentMouseUp, false );
@@ -425,37 +476,35 @@ function onDocumentMouseDown( event ) {
 
 }
 
+var lastMouseX = null;
+var isMouseStartMoving = false;
+
 function onDocumentMouseMove( event ) {
 
     mouseX = event.clientX - windowHalfX;
 
-    targetRotation = targetRotationOnMouseDown + ( mouseX - mouseXOnMouseDown ) * 0.02;
+    if(torqueText.selectedChar == "x" && initialMouseClickX != null){
+        increaseCrossProduct((mouseX - lastMouseX));
+    }
+
+    if(isMouseStartMoving == true){
+        lastMouseX = initialMouseClickX;
+        isMouseStartMoving = false;
+    }else{
+        lastMouseX = mouseX;
+    }
 
 }
+
+
 
 function onDocumentMouseUp( event ) {
 
     event.preventDefault();
 
-    var vector = new THREE.Vector3(( event.clientX / window.innerWidth)*2 - 1, -(event.clientY / window.innerHeight)*2 +1, 0);
-    projector.unprojectVector(vector, camera);
 
-    var ray = new THREE.Ray( camera.position, vector.subSelf( camera.position).normalize());
-
-    var intersects = ray.intersectObjects( objects);
-
-    if(intersects.length > 0){
-        for(i in torqueText.meta){
-            if(torqueText.meta[i].xPos == intersects[0].object.position.x){
-                alert("you clicked: " + torqueText.meta[i].char);
-            }
-        }
-    }
-    else{
-        alert("did not intersect");
-    }
-//    increaseCrossProduct();
-
+    initialMouseClickX = null;
+    torqueText.selectedChar = null;
     document.removeEventListener( 'mousemove', onDocumentMouseMove, false );
     document.removeEventListener( 'mouseup', onDocumentMouseUp, false );
     document.removeEventListener( 'mouseout', onDocumentMouseOut, false );
@@ -498,30 +547,38 @@ function rotationAroundAxis( object, axisPoint, axisDirection, amount){
 
 var rotation_matrix;
 
-function increaseCrossProduct(){
+function increaseCrossProduct(size){
 
 
-    if(Math.abs(forceVector.rotation.z) >= Math.PI / 2.0){
-        return;
-    }else{
-
-//        forceVector.rotation.set(0, 0, 0);
-//        forceVector.rotation.setRotationFromEuler(forceVector.rotation);
-
-//        var rotation_matrix = new THREE.Matrix4().setRotationX(.01); // Animated rotation will be in .01 radians along object's X axis
-//        // Update the object's rotation & apply it
-//        rotation_matrix.multiplySelf(forceVector.matrix);
+//    if(Math.abs(forceVector.rotation.z) >= Math.PI / 2.0){
+//        return;
+//    }else{
+//
+////        forceVector.rotation.set(0, 0, 0);
+////        forceVector.rotation.setRotationFromEuler(forceVector.rotation);
+////
+////        var rotation_matrix = new THREE.Matrix4().setRotationX(.01); // Animated rotation will be in .01 radians along object's X axis
+////        // Update the object's rotation & apply it
+////        rotation_matrix.multiplySelf(forceVector.matrix);
 //        forceVector.rotation.z -= 0.1;
+//
+//
+////        forceVector.rotation.z -= 0.1;
+//    }
+
+    forceVector.rotation.z -= size/10;
 
 
-//        forceVector.rotation.z -= 0.1;
-    }
+    scene.remove(torqueText.full3DObject);
 
-//    parent.remove(text.cross);
-//    parent.remove(text.force);
-//    parent.remove(text.torque);
-//    parent.remove(text.equals);
-//    parent.remove(text.r);
+    torqueText.charSizeList[3] += size;
+    torqueText.charSizeList[0] += size;
+//    alert("textsize = "  + torqueText.charSizeList[3]);
+    createAndSetTextAttributes(torqueText, 0, textMaterial);
+    scene.add(torqueText.full3DObject);
+//    alert("newChildren: " + torqueText.full3DObject.children.length);
+//    alert(torqueText.meshList.length);
+//    scene.add(torqueText.full3DObject);
 //    textSize.cross += 1;
 //    textSize.torque += 1;
 //    createAndSetTextAttributes( "meow to the cheese");
